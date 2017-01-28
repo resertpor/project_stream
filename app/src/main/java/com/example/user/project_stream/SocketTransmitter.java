@@ -59,7 +59,7 @@ public class SocketTransmitter extends Thread {
                 for (int key : message.keySet()) {
                     Log.i("abc", key + "," + message.get(key));
                     byte[] data = new byte[512];
-                    if (message.get(key) != null) {
+                    if (!message.get(key).isEmpty()) {
                         bos.write(message.get(key).getBytes());
                         bos.flush();
                     }
@@ -87,7 +87,7 @@ public class SocketTransmitter extends Thread {
     }
 
     public void read(int requestId, SocketCallback socketCallback) {
-        this.message.put(requestId, null);
+        this.message.put(requestId, "");
         this.callback.put(requestId, socketCallback);
         synchronized (sleep) {
             sleep.notify();

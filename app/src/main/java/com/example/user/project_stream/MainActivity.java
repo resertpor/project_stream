@@ -41,17 +41,13 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
     private AudioRecord audioRecorder;
     private int minBufferSize;
 
-    //stream
-    private InputStream socketIs;
-    private OutputStream socketOs;
-
     //control
     private boolean doPlay = true;
     private boolean doRecord = true;
     private PlayThread playThread;
     private RecordThread recordThread;
     SocketTransmitter socketTransmitter;
-    Button bt_call, bt_receive;
+    Button bt_call, bt_receive, bt_reject;
     EditText et_call;
 
     @Override
@@ -60,21 +56,29 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
         setContentView(R.layout.activity_main);
         bt_call = (Button) findViewById(R.id.call);
         et_call = (EditText) findViewById(R.id.et_call);
+        bt_reject = (Button) findViewById(R.id.reject);
         bt_receive = (Button) findViewById(R.id.receive);
         socketTransmitter = new SocketTransmitter("192.168.1.40", 1234);
         socketTransmitter.start();
 
-//        ActivityCompat.requestPermissions(this, permissions, REQUEST_RECORD_AUDIO_PERMISSION);
+        ActivityCompat.requestPermissions(this, permissions, REQUEST_RECORD_AUDIO_PERMISSION);
         bt_call.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 socketTransmitter.send(1234, "request_call:99:" + et_call.getText(), MainActivity.this);
             }
         });
-        bt_receive.setOnClickListener(new View.OnClickListener() {
+        bt_reject.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 socketTransmitter.send(1234, "reject:88:0", MainActivity.this);
+            }
+        });
+        bt_receive.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                socketTransmitter.send(1234, "accept:88:0", MainActivity.this);
+                startStreaming();
             }
         });
 
@@ -93,29 +97,15 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
         }
 
         init();
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    connectServer();
-                    playThread.start();
-                    recordThread.start();
-                    audioRecorder.startRecording();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-    }
-
-    private void connectServer() throws IOException {
-        Socket socket = new Socket("192.168.1.40", 1234);
-        socketIs = socket.getInputStream();
-        socketOs = socket.getOutputStream();
     }
 
     private void init() {
+
+        AudioManager m_amAudioManager;
+        m_amAudioManager = (AudioManager) getSystemService(MainActivity.AUDIO_SERVICE);
+        m_amAudioManager.setMode(AudioManager.MODE_IN_CALL);
+        m_amAudioManager.setSpeakerphoneOn(false);
+
         minBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, ENCODING);
         audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, ENCODING, minBufferSize, AudioTrack.MODE_STREAM);
         audioTrack.play();
@@ -159,16 +149,40 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
                     }
                 });
 
+            } else if (result.startsWith("start")) {
+                this.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, "Accept calling", Toast.LENGTH_SHORT).show();
+                        startStreaming();
+                    }
+                });
+
             }
         }
         Log.i("123", requestId + "," + result);
+    }
+
+    private void startStreaming() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    playThread.start();
+                    recordThread.start();
+                    audioRecorder.startRecording();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
     }
 
     class RecordThread extends Thread {
 
         @Override
         public void run() {
-            BufferedOutputStream bos = new BufferedOutputStream(socketOs);
+            BufferedOutputStream bos = new BufferedOutputStream(socketTransmitter.getOutputstream());
             int n;
             byte[] data = new byte[minBufferSize];
             while (doRecord) {
@@ -192,7 +206,7 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
 
         @Override
         public void run() {
-            BufferedInputStream bis = new BufferedInputStream(socketIs);
+            BufferedInputStream bis = new BufferedInputStream(socketTransmitter.getInputstream());
             int n;
             byte data[] = new byte[minBufferSize];
             while (doPlay) {

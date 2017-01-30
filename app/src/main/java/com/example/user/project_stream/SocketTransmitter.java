@@ -5,6 +5,8 @@ import android.util.Log;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 import java.util.Hashtable;
 import java.util.Objects;
@@ -92,5 +94,23 @@ public class SocketTransmitter extends Thread {
         synchronized (sleep) {
             sleep.notify();
         }
+    }
+
+    public InputStream getInputstream() {
+        try {
+            return socket.getInputStream();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public OutputStream getOutputstream() {
+        try {
+            return socket.getOutputStream();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }

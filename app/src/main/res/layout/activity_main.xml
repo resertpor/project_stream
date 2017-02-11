@@ -36,4 +36,11 @@
         android:layout_height="wrap_content"
         android:layout_below="@+id/reject"
         android:text="receive" />
+
+    <Button
+        android:id="@+id/speaker"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="speaker"
+        android:layout_below="@+id/receive" />
 </RelativeLayout>

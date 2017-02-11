@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 
 public class MainActivity extends AppCompatActivity implements SocketCallback {
     public final int SAMPLE_RATE = 44100;
@@ -47,8 +48,9 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
     private PlayThread playThread;
     private RecordThread recordThread;
     SocketTransmitter socketTransmitter;
-    Button bt_call, bt_receive, bt_reject;
+    Button bt_call, bt_receive, bt_reject, bt_speaker;
     EditText et_call;
+    int callId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,6 +60,7 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
         et_call = (EditText) findViewById(R.id.et_call);
         bt_reject = (Button) findViewById(R.id.reject);
         bt_receive = (Button) findViewById(R.id.receive);
+        bt_speaker = (Button) findViewById(R.id.speaker);
         socketTransmitter = new SocketTransmitter("192.168.1.40", 1234);
         socketTransmitter.start();
 
@@ -81,6 +84,15 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
                 startStreaming();
             }
         });
+        bt_speaker.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                audioTrack.stop();
+                audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, ENCODING, minBufferSize, AudioTrack.MODE_STREAM);
+                audioTrack.play();
+            }
+        });
 
     }
 
@@ -101,13 +113,9 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
 
     private void init() {
 
-        AudioManager m_amAudioManager;
-        m_amAudioManager = (AudioManager) getSystemService(MainActivity.AUDIO_SERVICE);
-        m_amAudioManager.setMode(AudioManager.MODE_IN_CALL);
-        m_amAudioManager.setSpeakerphoneOn(false);
 
         minBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, ENCODING);
-        audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, ENCODING, minBufferSize, AudioTrack.MODE_STREAM);
+        audioTrack = new AudioTrack(AudioManager.STREAM_VOICE_CALL, SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, ENCODING, minBufferSize, AudioTrack.MODE_STREAM);
         audioTrack.play();
 
         playThread = new PlayThread();
@@ -132,6 +140,8 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
     @Override
     public void onSocketResult(int requestId, String result) {
         if ((requestId == 1234) && (result.startsWith("waiting"))) {
+
+            callId = Integer.parseInt(result.split(":")[2]);
             this.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -184,11 +194,29 @@ public class MainActivity extends AppCompatActivity implements SocketCallback {
         public void run() {
             BufferedOutputStream bos = new BufferedOutputStream(socketTransmitter.getOutputstream());
             int n;
-            byte[] data = new byte[minBufferSize];
+            byte[] data = new byte[minBufferSize * 2];
             while (doRecord) {
                 try {
                     n = audioRecorder.read(data, 0, data.length);
-                    bos.write(data, 0, n);
+                    byte[] callId = ByteBuffer.allocate(4).putInt(MainActivity.this.callId).array();
+                    byte[] timeStamp = ByteBuffer.allocate(8).putLong(System.currentTimeMillis()).array();
+                    byte[] type = ByteBuffer.allocate(4).putInt(1).array();
+                    byte[] length = ByteBuffer.allocate(4).putInt(n).array();
+                    byte[] payLoad = new byte[n];
+                    System.arraycopy(data, 0, payLoad, 0, n);
+                    byte[] packet = new byte[callId.length + timeStamp.length + type.length + length.length + n];
+
+                    int count = 0;
+                    System.arraycopy(callId, 0, packet, count, callId.length);
+                    count += callId.length;
+                    System.arraycopy( type, 0,packet, count, type.length);
+                    count += type.length;
+                    System.arraycopy(timeStamp, 0,packet, count, timeStamp.length);
+                    count += timeStamp.length;
+                    System.arraycopy( length, 0,packet, count, length.length);
+                    count += length.length;
+                    System.arraycopy( payLoad, 0, packet, count, payLoad.length);
+                    bos.write(packet);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

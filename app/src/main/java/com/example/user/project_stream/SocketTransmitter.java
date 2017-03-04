@@ -65,8 +65,15 @@ public class SocketTransmitter extends Thread {
                         bos.write(message.get(key).getBytes());
                         bos.flush();
                     }
-                    int n = bis.read(data);
-
+                    int n;
+                    byte[] data2 = new byte[0];
+                    n = bis.read(data);
+//                    while ((n = bis.read(data)) != -1) {
+//                        byte[] temp = new byte[data2.length + n];
+//                        System.arraycopy(data2, 0, temp, 0, data2.length);
+//                        System.arraycopy(data, 0, temp, data2.length, n);
+//                        data2 = temp;
+//                    }
                     message.remove(key);
                     SocketCallback temp = callback.get(key);
                     callback.remove(key);
